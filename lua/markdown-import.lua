@@ -1,12 +1,12 @@
-local augroup = vim.api.nvim_create_augroup("ScratchBuffer", { clear = true })
+local mlflow_uri
 
-local function main()
-  print("Hello from our plugin")
+local function fetch_mlflow_experiments()
+  print("Listing MLflow experiments from URI: " .. mlflow_uri)
 end
 
-local function setup()
-  vim.api.nvim_create_autocmd("VimEnter",
-    { group = augroup, desc = "Set a fennel scratch buffer on load", once = true, callback = main })
+local function setup(opts)
+  mlflow_uri = opts.mlflow_uri
+  vim.keymap.set("n", "<leader>ml", fetch_mlflow_experiments)
 end
 
 return { setup = setup }
