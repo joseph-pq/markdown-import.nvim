@@ -1,25 +1,59 @@
 local mlflow_uri
+local nui_input = require("nui.input")
+local nui_utils_event = require("nui.utils.autocmd").event
 
-local function async_http_request(url, method, body, headers, callback)
+local function telescope_input(prompt, callback)
+  local input_box = nui_input({
+    position = "50%",
+    size = {
+      width = 40,
+    },
+    border = {
+      style = "rounded",
+      text = {
+        top = prompt,
+        top_align = "center",
+      },
+    },
+    win_options = {
+      winhighlight = "Normal:Normal,FloatBorder:FloatBorder",
+    },
+  }, {
+    prompt = "",
+    on_submit = callback,
+  })
+
+  input_box:mount()
+
+  input_box:on(nui_utils_event.BufLeave, function()
+    input_box:unmount()
+  end)
+end
+
+
+---@param url string
+---@param method string
+---@param body string
+---@param headers table
+---@param callback function
+local function async_http_request(opts)
   local uv = require('luv')
   local stdout = uv.new_pipe(false)
   local stderr = uv.new_pipe(false)
   local handle
 
-  local args = { "-s", "-X", method, url }
-  if headers then
-      for _, header in ipairs(headers) do
-          print("header: " .. header)
-          table.insert(args, "-H")
-          table.insert(args, header)
-      end
+  local args = { "-s", "-X", opts.method, opts.url }
+  if opts.headers then
+    for _, header in ipairs(opts.headers) do
+      table.insert(args, "-H")
+      table.insert(args, header)
+    end
   end
 
-  if body and body ~= "" then
+  if opts.body and opts.body ~= "" then
     table.insert(args, "-d")
-    table.insert(args, "'" .. body .. "'")
+    table.insert(args, "'" .. opts.body .. "'")
   end
-  print("curl " .. table.concat(args, " "))
 
   handle = uv.spawn(
     "curl",
@@ -40,7 +74,7 @@ local function async_http_request(url, method, body, headers, callback)
       return
     end
     if data then
-      callback(data)
+      opts.callback(data)
     end
   end)
 
@@ -53,23 +87,41 @@ local function async_http_request(url, method, body, headers, callback)
   end)
 end
 
-local function fetch_mlflow_experiments()
+local function fetch_run_metrics(run_id, callback)
   local method = 'GET'
-  local url = mlflow_uri .. '/api/2.0/mlflow/experiments/search'
-  local headers = { ['Content-Type'] = 'application/json' }
-  local body = {
-    max_results = 1
-  }
-  async_http_request(url, method, vim.json.encode(body), headers, function(data)
-    print("gaaaaaa")
-    local experiments = vim.json.decode(data)
-    print(vim.inspect(experiments))
+  local url = mlflow_uri .. '/api/2.0/mlflow/runs/get?run_id=' .. run_id
+  -- local headers = { ['Content-Type'] = 'application/json' }
+  -- local body = {
+  --   max_results = 1
+  -- }
+  async_http_request({
+    url = url,
+    method = method,
+    callback = function(data)
+      local run_data = vim.json.decode(data)
+      callback(run_data)
+    end
+  })
+end
+
+local function paste_run_metrics(data)
+  vim.schedule(function()
+    vim.api.nvim_paste(vim.json.encode(data), true, -1)
   end)
 end
 
+local function bring_run_metrics()
+  telescope_input(
+    "Enter run id",
+    function(run_id)
+      fetch_run_metrics(run_id, paste_run_metrics)
+    end
+  )
+end
+
 local function setup(opts)
-  mlflow_uri = opts.mlflow_uri
-  vim.keymap.set("n", "<leader>tml", fetch_mlflow_experiments)
+  mlflow_uri = opts.mlflow_uri or os.getenv("MLFLOW_URI")
+  vim.keymap.set("n", "<leader>tml", bring_run_metrics)
 end
 
 return { setup = setup }
