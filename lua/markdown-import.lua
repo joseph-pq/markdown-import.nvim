@@ -112,7 +112,7 @@ end
 
 local function bring_run_metrics()
   telescope_input(
-    "Enter run id",
+    'Enter run id',
     function(run_id)
       fetch_run_metrics(run_id, paste_run_metrics)
     end
@@ -120,8 +120,8 @@ local function bring_run_metrics()
 end
 
 local function setup(opts)
-  mlflow_uri = opts.mlflow_uri or os.getenv("MLFLOW_URI")
-  vim.keymap.set("n", "<leader>tml", bring_run_metrics)
+  mlflow_uri = opts.mlflow_uri or os.getenv('MLFLOW_URI')
+  vim.keymap.set('n', '<leader>tml', bring_run_metrics, {desc='Mlflow run'})
 end
 
 return { setup = setup }
