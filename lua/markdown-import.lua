@@ -1,6 +1,8 @@
-local mlflow_uri
+local curl = require('plenary.curl')
 local nui_input = require("nui.input")
 local nui_utils_event = require("nui.utils.autocmd").event
+
+local mlflow_uri
 
 local function telescope_input(prompt, callback)
   local input_box = nui_input({
@@ -31,60 +33,28 @@ local function telescope_input(prompt, callback)
 end
 
 
----@param url string
----@param method string
----@param body string
----@param headers table
----@param callback function
+---@class AsyncHttpRequestOpts
+---@field url string
+---@field method string
+---@field body string?
+---@field headers table?
+---@field callback function
+
+---@param opts AsyncHttpRequestOpts
 local function async_http_request(opts)
-  local uv = require('luv')
-  local stdout = uv.new_pipe(false)
-  local stderr = uv.new_pipe(false)
-  local handle
-
-  local args = { "-s", "-X", opts.method, opts.url }
-  if opts.headers then
-    for _, header in ipairs(opts.headers) do
-      table.insert(args, "-H")
-      table.insert(args, header)
-    end
-  end
-
-  if opts.body and opts.body ~= "" then
-    table.insert(args, "-d")
-    table.insert(args, "'" .. opts.body .. "'")
-  end
-
-  handle = uv.spawn(
-    "curl",
-    {
-      args = args,
-      stdio = { nil, stdout, stderr }
-    },
-    function(code, signal)
-      stdout:close()
-      stderr:close()
-      handle:close()
-    end
-  )
-
-  uv.read_start(stdout, function(err, data)
-    if err then
-      print("Error: " .. err)
-      return
-    end
-    if data then
-      opts.callback(data)
-    end
-  end)
-
-  vim.loop.read_start(stderr, function(err, data)
-    if err then
-      print("Curl Error: " .. err)
-    elseif data then
-      print("Curl Stderr: " .. data)
-    end
-  end)
+  curl.request({
+    url = opts.url,
+    method = opts.method,
+    headers = opts.headers,
+    body = opts.body,
+    on_success = function(res)
+      -- plenary curl returns the body directly
+      opts.callback(res.body)
+    end,
+    on_error = function(err)
+      print("HTTP Request Error: " .. vim.inspect(err))
+    end,
+  })
 end
 
 local function fetch_run_metrics(run_id, callback)
@@ -121,7 +91,7 @@ end
 
 local function setup(opts)
   mlflow_uri = opts.mlflow_uri or os.getenv('MLFLOW_URI')
-  vim.keymap.set('n', '<leader>tml', bring_run_metrics, {desc='Mlflow run'})
+  vim.keymap.set('n', '<leader>tml', bring_run_metrics, { desc = 'Mlflow run' })
 end
 
 return { setup = setup }
