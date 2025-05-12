@@ -47,7 +47,7 @@ local function async_http_request(opts)
     method = opts.method,
     headers = opts.headers,
     body = opts.body,
-    on_success = function(res)
+    callback = function(res)
       -- plenary curl returns the body directly
       opts.callback(res.body)
     end,
@@ -76,7 +76,17 @@ end
 
 local function paste_run_metrics(data)
   vim.schedule(function()
-    vim.api.nvim_paste(vim.json.encode(data), true, -1)
+    -- print keys of data
+    local keys = {}
+    for k, v in pairs(data.run.data.metrics) do
+      table.insert(keys, v)
+      if k == 2 then
+        break
+      end
+    end
+    vim.api.nvim_paste("run name: " .. data.run.info.run_name .. "\n", true, -1)
+    print("keys:", vim.inspect(keys))
+    -- vim.api.nvim_paste(vim.json.encode(data.run.data), true, -1)
   end)
 end
 
@@ -90,7 +100,7 @@ local function bring_run_metrics()
 end
 
 local function setup(opts)
-  mlflow_uri = opts.mlflow_uri or os.getenv('MLFLOW_URI')
+  mlflow_uri = os.getenv('MLFLOW_TRACKING_URI') or opts.mlflow_uri
   vim.keymap.set('n', '<leader>tml', bring_run_metrics, { desc = 'Mlflow run' })
 end
 
