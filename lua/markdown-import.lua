@@ -68,33 +68,40 @@ end
 local function fetch_run_metrics(run_id, callback)
   local method = 'GET'
   local url = mlflow_uri .. '/api/2.0/mlflow/runs/get?run_id=' .. run_id
-  -- local headers = { ['Content-Type'] = 'application/json' }
-  -- local body = {
-  --   max_results = 1
-  -- }
   async_http_request({
     url = url,
     method = method,
     callback = function(data)
       local run_data = vim.json.decode(data)
-      callback(run_data)
+      local run_uri
+      if os.getenv('MLFLOW_TRACKING_URI') == "databricks" then
+        run_uri = mlflow_uri .. '/ml/experiments/' .. run_data.run.info.experiment_id .. '/runs/' .. run_data.run.info.run_id
+      else
+        run_uri = mlflow_uri .. '/#/experiments/' .. run_data.run.info.experiment_id .. '/runs/' .. run_data.run.info.run_id
+      end
+      callback(run_uri, run_data)
     end
   })
 end
 
-local function paste_run_metrics(data)
+local function paste_run_metrics(run_uri, data)
+  print("run_uri:" .. run_uri)
   vim.schedule(function()
     -- print keys of data
     local keys = {}
-    for k, v in pairs(data.run.data.metrics) do
+    for _, v in pairs(data.run.data.metrics) do
       table.insert(keys, v)
-      if k == 2 then
-        break
-      end
     end
-    vim.api.nvim_paste("run name: " .. data.run.info.run_name .. "\n", true, -1)
-    print("keys:", vim.inspect(keys))
-    -- vim.api.nvim_paste(vim.json.encode(data.run.data), true, -1)
+    vim.api.nvim_paste("run name: [" .. data.run.info.run_name .. "](" .. run_uri ..")\n", true, -1)
+    for _, elem in pairs(keys) do
+      local metric_name = elem.key
+      local metric_value = elem.value
+
+      -- convert value to float with two decimal places
+      local metric_value_float = string.format("%.4f", metric_value)
+
+      vim.api.nvim_paste("- " .. metric_name .. ": " .. metric_value_float .. "\n", true, -1)
+    end
   end)
 end
 
