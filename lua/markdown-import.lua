@@ -3,6 +3,8 @@ local nui_input = require("nui.input")
 local nui_utils_event = require("nui.utils.autocmd").event
 
 local mlflow_uri
+local databricks_token
+local databricks_host
 
 local function telescope_input(prompt, callback)
   local input_box = nui_input({
@@ -42,10 +44,16 @@ end
 
 ---@param opts AsyncHttpRequestOpts
 local function async_http_request(opts)
+  local headers = opts.headers or {}
+  -- Add Databricks authentication if configured
+  if databricks_token then
+    headers['Authorization'] = 'Bearer ' .. databricks_token
+  end
+
   curl.request({
     url = opts.url,
     method = opts.method,
-    headers = opts.headers,
+    headers = headers,
     body = opts.body,
     callback = function(res)
       -- plenary curl returns the body directly
@@ -101,6 +109,17 @@ end
 
 local function setup(opts)
   mlflow_uri = os.getenv('MLFLOW_TRACKING_URI') or opts.mlflow_uri
+
+  -- Handle Databricks configuration
+  if mlflow_uri == "databricks" then
+    databricks_host = os.getenv('DATABRICKS_HOST')
+    databricks_token = os.getenv('DATABRICKS_TOKEN')
+    if not databricks_host or not databricks_token then
+      error("When using Databricks MLflow, both DATABRICKS_HOST and DATABRICKS_TOKEN environment variables are required")
+    end
+    mlflow_uri = databricks_host
+  end
+
   vim.keymap.set('n', '<leader>tml', bring_run_metrics, { desc = 'Mlflow run' })
 end
 
